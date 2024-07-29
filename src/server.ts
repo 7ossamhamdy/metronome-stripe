@@ -41,11 +41,22 @@ app.post(
 );
 
 app.get(
-  '/customers/:externalId',
+  '/customers/:customerId',
   asyncHandler(async (req, res) => {
-    const { externalId } = req.params;
+    const { customerId } = req.params;
 
-    const customer = await metronomeService.findCustomer(externalId);
+    const customer = await metronomeService.findCustomer(customerId);
+
+    return res.json(customer);
+  }),
+);
+
+app.get(
+  '/customers',
+  asyncHandler(async (req, res) => {
+    const { ingestAlias } = req.query as { ingestAlias: string };
+
+    const customer = await metronomeService.findCustomerByIngestAlias(ingestAlias);
 
     return res.json(customer);
   }),
@@ -119,19 +130,26 @@ app.post(
 );
 
 app.post(
-  '/customers/:customerId/credits/refund',
+  '/customers/:customerId/credits/void',
   asyncHandler(async (req, res) => {
     const { customerId } = req.params;
-    const { grantId, invoiceId } = req.body;
+    const { grantId } = req.body;
 
-    const { data: invoice } = await metronomeService.getCustomerInvoice(customerId, invoiceId);
+    const { data: invoice } = await metronomeService.voidCreditGrant(customerId, grantId);
+    await stripeService.voidOrRefundInvoice(invoice.external_invoice.invoice_id);
 
-    const [credit] = await Promise.all([
-      metronomeService.voidCreditGrant(grantId),
-      stripeService.refundInvoice(invoice.external_invoice.invoice_id),
-    ]);
+    return res.json(invoice);
+  }),
+);
 
-    return res.json(credit);
+app.get(
+  '/customers/:customerId/credits',
+  asyncHandler(async (req, res) => {
+    const { customerId } = req.params;
+
+    const credits = await metronomeService.getCustomerCreditsTotal(customerId);
+
+    return res.json(credits);
   }),
 );
 
@@ -140,7 +158,7 @@ app.get(
   asyncHandler(async (req, res) => {
     const { customerId } = req.params;
 
-    const credits = await metronomeService.listCustomerCreditLedgers(customerId, req.query);
+    const credits = await metronomeService.listCustomerCreditLedgers(customerId);
 
     return res.json(credits);
   }),
@@ -161,8 +179,9 @@ app.get(
   '/customers/:customerId/invoices',
   asyncHandler(async (req, res) => {
     const { customerId } = req.params;
+    const reqQuery = req.query as { [key: string]: string };
 
-    const invoices = await metronomeService.listCustomerInvoices(customerId, req.query);
+    const invoices = await metronomeService.listCustomerInvoices(customerId, reqQuery);
 
     return res.json(invoices);
   }),
@@ -193,4 +212,4 @@ app.post(
 // @ts-expect-error
 app.use(errorHandler);
 
-app.listen(3000, () => console.log(`Node server listening on http://localhost${3000}`));
+app.listen(3000, () => console.log(`Node server listening on http://localhost:${3000}`));

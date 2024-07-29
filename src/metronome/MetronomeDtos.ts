@@ -13,5 +13,5 @@ export interface EventDto {
 
 export interface PaginationDto {
   limit?: number;
-  nextPage?: string;
+  next_page?: string;
 }

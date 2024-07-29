@@ -11,7 +11,7 @@ export class StripeService {
 
     this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-    // this.test('cus_QUrQwAaenCruXf', '62ef015b-183a-4ba9-ba81-9fdb51c25567');
+    // this.sendToStripe('cus_QYcq5nr3HHSrey', '8ff9a5cd-1442-4975-8b00-edcd81bb48ac');
   }
 
   async retrieveCustomer(customerId: string): Promise<Stripe.Customer> {
@@ -84,12 +84,20 @@ export class StripeService {
     return this.stripe.invoices.voidInvoice(invoiceId);
   }
 
-  async refundInvoice(invoiceId: string): Promise<Stripe.Response<Stripe.Refund>> {
+  async refundInvoice(chargeId: string): Promise<Stripe.Refund> {
+    return this.stripe.refunds.create({
+      charge: chargeId,
+    });
+  }
+
+  async voidOrRefundInvoice(invoiceId: string): Promise<Stripe.Refund | Stripe.Invoice> {
     const invoice = await this.retrieveInvoice(invoiceId);
 
-    return this.stripe.refunds.create({
-      charge: invoice.charge.toString(),
-    });
+    if (invoice.status === 'paid') {
+      return this.refundInvoice(invoice.charge.toString());
+    }
+
+    return this.voidInvoice(invoiceId);
   }
 
   async createInvoice(customerId: string, metronomeId: string) {
@@ -98,7 +106,7 @@ export class StripeService {
       auto_advance: false,
       metadata: {
         metronome_id: metronomeId,
-        metronome_client_id: uuid(),
+        metronome_client_id: 'f21094c8-99cb-4b68-8fd6-335c53ac39f0',
         metronome_environment: process.env.METRONOME_ENVIRONMENT,
       },
     });
@@ -110,7 +118,7 @@ export class StripeService {
     });
   }
 
-  async testSendToStripe(custId: string, metId: string) {
+  async sendToStripe(custId: string, metId: string) {
     const invoice = await this.createInvoice(custId, metId);
 
     console.log(invoice);
