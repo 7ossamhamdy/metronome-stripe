@@ -10,11 +10,10 @@ import {
   ListInvoicesResponse,
   GetLedgersResponse,
   MetronomeListResponse,
-  MetronomeResponse,
   GetGrantsResponse,
 } from './MetronomeService.d';
 
-import DATA from '../data.json';
+import CREDITS_DATA from './credits-data.json';
 import { CreateCustomerDto, EventDto, PaginationDto } from './MetronomeDtos';
 
 export class MetronomeAPIError extends Error {
@@ -85,7 +84,7 @@ export class MetronomeService {
     return { data: data[0] };
   }
 
-  async listCustomerPlans(customerId: string, { limit, next_page }: PaginationDto) {
+  async listCustomerPlans(customerId: string, { limit = 10, next_page = null }: PaginationDto) {
     return this.api.get(`/customers/${customerId}/plans`, {
       params: {
         limit,
@@ -119,12 +118,14 @@ export class MetronomeService {
   }
 
   async createCreditGrant(customerId: string, creditId: number) {
-    const credit = DATA.credits.find((c) => c.id === creditId);
+    const credit = CREDITS_DATA.credits.find((c) => c.id === creditId);
     if (!credit) {
       throw new MetronomeAPIError('Credit not found', 400);
     }
 
-    const { pending } = await this.getCustomerCreditsTotal(customerId);
+    const {
+      data: { pending },
+    } = await this.getCustomerCreditsTotal(customerId);
     if (pending > 0) {
       throw new MetronomeAPIError('Cannot purchase credits while there are pending credits', 400);
     }
@@ -151,17 +152,6 @@ export class MetronomeService {
       expires_at: yearLater.toISOString(),
       reason: `Purchased ${credit.amount} credits for $${credit.cost}`,
       credit_grant_type: 'credits',
-      // prepaid_options: {
-      //   billing_provider_type: 'stripe',
-      //   stripe_options: {
-      //     redirect_url: 'https://api.metronome.com/v1',
-      //     invoice_custom_fields: [{ key: 'credit_purchase', value: 'true' }],
-      //     invoice_metadata: {
-      //       metronome_id: uniqueness_key,
-      //       service_period: `${today.toISOString()} - ${yearLater.toISOString()}`,
-      //     },
-      //   },
-      // },
     };
 
     return this.api.post('/credits/createGrant', payload);
@@ -229,6 +219,15 @@ export class MetronomeService {
     });
   }
 
+  async listPlanCharges(plan_id: string, { limit, next_page }: PaginationDto = { limit: 10, next_page: null }) {
+    return this.api.get(`/planDetails/${plan_id}/charges`, {
+      params: {
+        limit,
+        next_page,
+      },
+    });
+  }
+
   async listCustomerBillableMetrics(customerId: string): Promise<ListCustomerBillableMetricsResponse> {
     return this.api.get<never, ListCustomerBillableMetricsResponse>(`/customers/${customerId}/billable-metrics`, {
       params: {
@@ -238,14 +237,28 @@ export class MetronomeService {
   }
 
   async ingestEvent(customerId: string, { eventType, properties }: EventDto) {
-    const { data: billableMetrics } = await this.listCustomerBillableMetrics(customerId);
+    const { data: activePlan } = await this.listCustomerPlans(customerId, { limit: 1 });
+
+    const [{ data: planCharges }, { data: billableMetrics }, { data: credits }] = await Promise.all([
+      this.listPlanCharges(activePlan[0].plan_id),
+      this.listCustomerBillableMetrics(customerId),
+      this.getCustomerCreditsTotal(customerId),
+    ]);
 
     const metric = billableMetrics.find((metric) =>
       metric.event_type_filter.in_values.find((eventValue) => eventValue === eventType),
     );
-
     if (!metric) {
       throw new MetronomeAPIError('Invalid event type', 400);
+    }
+
+    const charge = planCharges.find((charge) => charge.name === metric.name);
+    if (!charge) {
+      throw new MetronomeAPIError('Invalid event type', 400);
+    }
+
+    if (charge.prices[0].value > credits.available) {
+      throw new MetronomeAPIError('Insufficient credits', 400);
     }
 
     return this.api.post('/ingest', [
@@ -276,7 +289,9 @@ export class MetronomeService {
     return this.api.get<never, GetInvoiceResponse>(`/customers/${customerId}/invoices/${invoiceId}`);
   }
 
-  async getCustomerCreditsTotal(customerId: string) {
+  async getCustomerCreditsTotal(customerId: string): Promise<{
+    data: { pending: number; available: number; consumed: number; total: number };
+  }> {
     const credits = {
       pending: 0,
       available: 0,
@@ -287,7 +302,7 @@ export class MetronomeService {
     const { data: ledgers } = await this.listCustomerCreditLedgers(customerId);
 
     if (!ledgers) {
-      return credits;
+      return { data: credits };
     }
 
     credits.available = ledgers.ending_balance.including_pending;
@@ -303,6 +318,6 @@ export class MetronomeService {
       credits.available -= credits.pending;
     }
 
-    return credits;
+    return { data: credits };
   }
 }

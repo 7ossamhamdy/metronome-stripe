@@ -1,11 +1,3 @@
-export interface MetronomeResponse<T = Record<string, any>> {
-  data: T;
-}
-export interface MetronomeListResponse<T = Record<string, any>> {
-  data: T[];
-  next_page: string | null;
-}
-
 export type BillingProviderType =
   | 'aws_marketplace'
   | 'stripe'
@@ -15,6 +7,7 @@ export type BillingProviderType =
   | 'quickbooks_online'
   | 'workday'
   | 'gcp_marketplace';
+
 export type StripeCollectionMethod = 'charge_automatically' | 'send_invoice';
 
 export type ExternalInvoiceStatus =
@@ -30,20 +23,44 @@ export type ExternalInvoiceStatus =
   | 'SENT'
   | 'QUEUED';
 
-export type InvoiceBillableStatus = 'billable' | 'unbillable';
+export type BillableStatus = 'billable' | 'unbillable';
+
+export type ResellerType = 'AWS' | 'AWS_PRO_SERVICE' | 'GCP' | 'GCP_PRO_SERVICE';
+
+export type ChargeType = 'usage' | 'fixed' | 'composite' | 'minimum' | 'seat';
+
+export type RoundingBehavior = 'floor' | 'ceiling';
+
+export type CustomFields = { [key: string]: string };
 
 export type Customer = {
-  id: string;
-  external_id: string;
-  ingest_aliases: string[]; // (deprecated, use ingest_aliases instead)
-  name: string;
+  // the Metronome ID of the customer
+  id: string; // (required)
+
+  // (deprecated, use ingest_aliases instead) the first ID (Metronome or
+  // ingest alias) that can be used in usage events
+  external_id: string; // (required)
+
+  // aliases for this customer that can be used instead of the Metronome
+  // customer ID in usage events
+  ingest_aliases: [string]; // (required)
+
+  name: string; // (required)
+
+  // (required)
   customer_config: {
-    salesforce_account_id: string | null;
+    // The Salesforce account ID for the customer
+    salesforce_account_id: string | null; // (required)
   };
-  custom_fields: Record<string, string>;
+
+  // (required)
+  custom_fields: CustomFields;
+
+  // (required)
   current_billable_status: {
-    value: InvoiceBillableStatus;
-    effective_at: string; // RFC 3339 timestamp
+    value: BillableStatus; // (required) "billable" or "unbillable"
+
+    effective_at: string; // RFC 3339
   };
 };
 
@@ -121,35 +138,373 @@ export type BillableMetic = {
     },
   ];
 
-  custom_fields: {
-    string: string;
-  };
+  custom_fields: CustomFields;
 };
 
 export type Invoice = {
-  id: string;
-  start_timestamp: string; // RFC 3339 timestamp
-  end_timestamp: string; // RFC 3339 timestamp
-  customer_id: string;
-  customer_custom_fields: Record<string, string>;
-  type: string;
+  id: string; // (required)
+
+  customer_id: string; // (required)
+
+  customer_custom_fields: CustomFields;
+
+  // This field's availability is dependent on your client's configuration.
+  netsuite_sales_order_id: string;
+
+  // This field's availability is dependent on your client's configuration.
+  salesforce_opportunity_id: string;
+
+  net_payment_terms_days: number;
+
+  // (required)
   credit_type: {
-    id: string;
-    name: string; // 'USD (cents)'
+    name: string; // (required)
+
+    id: string; // (required)
   };
-  status: 'VOID' | 'ISSUED' | 'DRAFT' | 'FINALIZED';
-  total: number;
+
+  invoice_adjustments: {
+    name: string; // (required)
+
+    total: number; // (required)
+
+    // (required)
+    credit_type: {
+      name: string; // (required)
+
+      id: string; // (required)
+    };
+
+    credit_grant_id: string;
+
+    credit_grant_custom_fields: CustomFields;
+  }[];
+
+  // (required)
+  line_items: {
+    name: string; // (required)
+
+    group_key: string;
+
+    group_value: string | null;
+
+    quantity: number;
+
+    total: number; // (required)
+
+    // only present for beta contract invoices
+    unit_price: number;
+
+    product_id: string;
+
+    product_custom_fields: CustomFields;
+
+    product_type: string;
+
+    // only present for beta contract invoices. This field's availability
+    // is dependent on your client's configuration.
+    netsuite_item_id: string;
+
+    // only present for beta contract invoices
+    is_prorated: boolean;
+
+    // (required)
+    credit_type: {
+      name: string; // (required)
+
+      id: string; // (required)
+    };
+
+    // only present for beta contract invoices
+    starting_at: string; // RFC 3339
+
+    // only present for beta contract invoices
+    ending_before: string; // RFC 3339
+
+    // only present for beta contract invoices
+    commit_id: string;
+
+    commit_custom_fields: CustomFields;
+
+    // only present for beta contract invoices
+    commit_segment_id: string;
+
+    // only present for beta contract invoices
+    commit_type: string;
+
+    // only present for beta contract invoices. This field's availability
+    // is dependent on your client's configuration.
+    commit_netsuite_sales_order_id: string;
+
+    // only present for beta contract invoices. This field's availability
+    // is dependent on your client's configuration.
+    commit_netsuite_item_id: string;
+
+    // only present for beta contract invoices
+    postpaid_commit: {
+      id: string; // (required)
+    };
+
+    reseller_type: ResellerType;
+
+    sub_line_items: [
+      {
+        name: string; // (required)
+
+        // the unit price for this charge, present only if the charge is
+        // not tiered and the quantity is nonzero
+        price: number;
+
+        quantity: number; // (required)
+
+        subtotal: number; // (required)
+
+        charge_id: string;
+
+        credit_grant_id: string;
+
+        // when the current tier started and ends (for tiered charges only)
+        tier_period: {
+          starting_at: string; // (required) RFC 3339
+
+          ending_before: string; // RFC 3339
+        };
+
+        tiers: {
+          // at what metric amount this tier begins
+          starting_at: number; // (required)
+
+          quantity: number; // (required)
+
+          price: number; // (required)
+
+          subtotal: number; // (required)
+        }[];
+
+        custom_fields: CustomFields;
+
+        // The start date for the charge (for seats charges only).
+        start_date: string; // RFC 3339
+
+        // The end date for the charge (for seats charges only).
+        end_date: string; // RFC 3339
+      },
+    ];
+
+    custom_fields: CustomFields;
+
+    // if pricing groups are used, this will contain the values used to
+    // calculate the price
+    pricing_group_values: {
+      string: string;
+    };
+
+    // if presentation groups are used, this will contain the values used
+    // to break down the line item
+    presentation_group_values: {
+      string: string | null;
+    };
+
+    metadata: string;
+
+    // The start date for the billing period on the invoice.
+    netsuite_invoice_billing_start: string; // RFC 3339
+
+    // The end date for the billing period on the invoice.
+    netsuite_invoice_billing_end: string; // RFC 3339
+
+    // only present for beta contract invoices
+    professional_service_id: string;
+
+    professional_service_custom_fields: CustomFields;
+    // only present for beta contract invoices
+    scheduled_charge_id: string;
+
+    scheduled_charge_custom_fields: CustomFields;
+  }[];
+
+  // Beginning of the usage period this invoice covers (UTC)
+  start_timestamp: string; // RFC 3339
+
+  // End of the usage period this invoice covers (UTC)
+  end_timestamp: string; // RFC 3339
+
+  // When the invoice was issued (UTC)
+  issued_at: string; // RFC 3339
+
+  // When the invoice was created (UTC). This field is present for correction
+  // invoices only.
+  created_at: string; // RFC 3339
+
+  status: string; // (required)
+
   subtotal: number;
+
+  total: number; // (required)
+
+  type: string; // (required)
+
   external_invoice: {
-    invoice_id: string;
-    issued_at_timestamp: string; // RFC 3339 timestamp
     billing_provider_type: BillingProviderType;
+
+    invoice_id: string;
+
+    issued_at_timestamp: string; // RFC 3339
+
     external_status: ExternalInvoiceStatus;
-  } | null;
-  line_items: Record<string, any>[];
-  invoice_adjustments: Record<string, any>[];
-  custom_fields: Record<string, string>;
-  billable_status: InvoiceBillableStatus;
+  };
+
+  plan_id: string;
+
+  plan_name: string;
+
+  plan_custom_fields: CustomFields;
+
+  contract_id: string;
+
+  contract_custom_fields: CustomFields;
+
+  amendment_id: string;
+
+  correction_record: {
+    reason: string; // (required)
+
+    memo: string; // (required)
+
+    corrected_invoice_id: string; // (required)
+
+    corrected_external_invoice: {
+      billing_provider_type: BillingProviderType;
+
+      invoice_id: string;
+
+      issued_at_timestamp: string; // RFC 3339
+
+      external_status: ExternalInvoiceStatus;
+    };
+  };
+
+  // only present for beta contract invoices with reseller royalties
+  reseller_royalty: {
+    reseller_type: ResellerType; // (required)
+
+    netsuite_reseller_id: string; // (required)
+
+    fraction: string; // (required)
+
+    aws_options: {
+      aws_account_number: string;
+
+      aws_payer_reference_id: string;
+
+      aws_offer_id: string;
+    };
+
+    gcp_options: {
+      gcp_account_id: string;
+
+      gcp_offer_id: string;
+    };
+  };
+
+  custom_fields: CustomFields;
+
+  billable_status: BillableStatus;
+};
+
+export type CustomerPlan = {
+  // the ID of the customer plan
+  id: string; // (required)
+
+  // the ID of the plan
+  plan_id: string; // (required)
+
+  plan_name: string; // (required)
+
+  plan_description: string; // (required)
+
+  starting_on: string; // (required) RFC 3339
+
+  ending_before: string; // RFC 3339
+
+  net_payment_terms_days: number;
+
+  trial_info: {
+    ending_before: string; // (required) RFC 3339
+
+    // (required)
+    spending_caps: {
+      // (required)
+      credit_type: {
+        name: string; // (required)
+
+        id: string; // (required)
+      };
+
+      amount: number; // (required)
+
+      amount_remaining: number; // (required)
+    }[];
+  };
+
+  custom_fields: CustomFields;
+};
+
+export type PlanCharge = {
+  id: string; // (required)
+
+  name: string; // (required)
+
+  charge_type: ChargeType; // (required)
+
+  product_id: string; // (required)
+
+  product_name: string; // (required)
+
+  quantity: number;
+
+  // Used in price ramps.  Indicates how many billing periods pass before
+  // the charge applies.
+  start_period: number;
+
+  // Used in pricing tiers.  Indicates how often the tier resets. Default
+  // is 1 - the tier count resets every billing period.
+  tier_reset_frequency: number;
+
+  // (required)
+  credit_type: {
+    name: string; // (required)
+
+    id: string; // (required)
+  };
+
+  // Specifies how quantities for usage based charges will be converted.
+  unit_conversion: {
+    // The conversion factor
+    division_factor: number; // (required)
+
+    // Whether usage should be rounded down or up to the nearest whole
+    // number. If null, quantity will be rounded to 20 decimal places.
+    rounding_behavior: RoundingBehavior;
+  };
+
+  // (required)
+  prices: {
+    value: number; // (required)
+
+    // Used in pricing tiers.  Indicates at what metric value the price
+    // applies.
+    tier: number; // (required)
+
+    quantity: number;
+
+    collection_schedule: string;
+
+    collection_interval: number;
+  }[];
+
+  // (required)
+  custom_fields: CustomFields;
 };
 
 export type LedgerEntry = {
@@ -160,8 +515,8 @@ export type LedgerEntry = {
     id: string; // (required)
   };
 
+  // (required)
   starting_balance: {
-    // (required)
     // the starting balance, including all posted grants, deductions,
     // and expirations that happened at or before the effective_at
     // timestamp
@@ -177,8 +532,8 @@ export type LedgerEntry = {
   };
 
   // the effective balances at the end of the specified time window
+  // (required)
   ending_balance: {
-    // (required)
     // the ending balance, including the balance of all grants that
     // have not expired before the effective_at date and deductions
     // that happened before the effective_at date
@@ -247,7 +602,7 @@ export type LedgerEntry = {
   }[];
 };
 
-export type GrantEntry = {
+export type CreditGrant = {
   // the Metronome ID of the credit grant
   id: string; // (required)
 
@@ -378,8 +733,16 @@ export type GrantEntry = {
     name: string; // (required)
   }[];
 
-  custom_fields: Record<string, string>;
+  custom_fields: CustomFields;
 };
+
+export interface MetronomeResponse<T = Record<string, any>> {
+  data: T;
+}
+export interface MetronomeListResponse<T = Record<string, any>> {
+  data: T[];
+  next_page: string | null;
+}
 
 export type CreateCustomerRequest = {
   name: string;
@@ -389,7 +752,7 @@ export type CreateCustomerRequest = {
     billing_provider_type: BillingProviderType;
     stripe_collection_method: StripeCollectionMethod;
   };
-  custom_fields?: Record<string, string>;
+  custom_fields?: CustomFields;
 };
 export type CreateCustomerResponse = MetronomeResponse<
   Pick<Customer, 'id' | 'name' | 'external_id' | 'ingest_aliases' | 'custom_fields'>
@@ -407,4 +770,4 @@ export type ListInvoicesResponse = MetronomeListResponse<Invoice>;
 
 export type GetLedgersResponse = MetronomeResponse<LedgerEntry | null>;
 
-export type GetGrantsResponse = MetronomeResponse<GrantEntry>;
+export type GetGrantsResponse = MetronomeResponse<CreditGrant>;

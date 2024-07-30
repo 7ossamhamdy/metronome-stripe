@@ -2,14 +2,14 @@ import express, { urlencoded, Response } from 'express';
 import dotenv from 'dotenv';
 import { StripeService } from './stripe/StipeService';
 import { errorHandler, asyncHandler } from './errorHandler';
-import { MetronomeService } from './metronome/MetronomeService';
+import { MetronomeServiceSDK } from './metronome/MetronomeServiceSDK';
 
 dotenv.config({ path: './.env' });
 
 const app = express();
 
 const stripeService = new StripeService();
-const metronomeService = new MetronomeService();
+const metronomeService = new MetronomeServiceSDK();
 
 app.use(express.json());
 app.use(urlencoded({ extended: true }));
@@ -17,15 +17,6 @@ app.use(urlencoded({ extended: true }));
 app.get('/', async (_, res: Response) => {
   res.send('🤞');
 });
-
-app.get(
-  '/plans',
-  asyncHandler(async (req, res) => {
-    const plans = await metronomeService.listPlans(req.query);
-
-    return res.json(plans);
-  }),
-);
 
 app.post(
   '/customers',
@@ -192,9 +183,9 @@ app.get(
   asyncHandler(async (req, res) => {
     const { customerId, invoiceId } = req.params;
 
-    const invoices = await metronomeService.getCustomerInvoice(customerId, invoiceId);
+    const invoice = await metronomeService.getCustomerInvoice(customerId, invoiceId);
 
-    return res.json(invoices);
+    return res.json(invoice);
   }),
 );
 
