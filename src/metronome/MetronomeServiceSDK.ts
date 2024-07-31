@@ -215,7 +215,10 @@ export class MetronomeServiceSDK {
       status: 'FINALIZED',
     });
 
-    return invoices.data;
+    return {
+      data: invoices.data,
+      next_page: invoices.next_page,
+    };
   }
 
   async getCustomerInvoice(customerId: string, invoiceId: string) {

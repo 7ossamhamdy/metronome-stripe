@@ -86,4 +86,34 @@ export class StripeService {
 
     return this.voidInvoice(invoiceId);
   }
+
+  async createInvoice() {
+    const invoice = await this.stripe.invoices.create({
+      pending_invoice_items_behavior: 'include',
+      metadata: {
+        metronome_client_id: 'f21094c8-99cb-4b68-8fd6-335c53ac39f0',
+        metronome_environment: 'SANDBOX',
+        metronome_id: '92c6c757-648c-4c7e-a3c5-675c0a425ba7',
+      },
+      auto_advance: false,
+      automatic_tax: {
+        enabled: false,
+      },
+      currency: 'usd',
+      collection_method: 'charge_automatically',
+      customer: 'cus_QUrQwAaenCruXf',
+    });
+
+    // await this.stripe.invoiceItems.create({
+    //   invoice: invoice.id,
+    //   customer: 'cus_QUrQwAaenCruXf',
+    //   description: 'Test invoice',
+    //   amount: 100 * 100,
+    //   currency: 'usd',
+    // });
+
+    await this.stripe.invoices.finalizeInvoice(invoice.id, {
+      auto_advance: true,
+    });
+  }
 }
