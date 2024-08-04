@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import { v4 as uuid } from 'uuid';
 
 export class StripeService {
   private readonly stripe: Stripe;
@@ -88,32 +89,52 @@ export class StripeService {
   }
 
   async createInvoice() {
-    const invoice = await this.stripe.invoices.create({
-      pending_invoice_items_behavior: 'include',
+    // Create an invoice item first
+    await this.stripe.invoiceItems.create({
+      description: 'Atomica Credit credit purchase - 100 Credits',
+      quantity: 100,
       metadata: {
-        metronome_client_id: 'f21094c8-99cb-4b68-8fd6-335c53ac39f0',
-        metronome_environment: 'SANDBOX',
-        metronome_id: '92c6c757-648c-4c7e-a3c5-675c0a425ba7',
+        metronome_id: uuid(),
       },
+      period: {
+        start: Date.now(),
+        end: Date.now(),
+      },
+      currency: 'usd',
+      customer: 'cus_QYcq5nr3HHSrey', // Customer ID
+      unit_amount_decimal: '100',
+    });
+
+    // Create an invoice with the pending invoice item
+    const invoice = await this.stripe.invoices.create({
+      customer: 'cus_QYcq5nr3HHSrey',
+      collection_method: 'charge_automatically',
+      pending_invoice_items_behavior: 'include', // includes pending invoice items in the invoice (from the previous step)
+      currency: 'usd',
       auto_advance: false,
       automatic_tax: {
         enabled: false,
       },
-      currency: 'usd',
-      collection_method: 'charge_automatically',
-      customer: 'cus_QUrQwAaenCruXf',
+
+      // Metronome adds metadata to the invoice to track the invoice in Metronome
+      // metadata: {
+      //   metronome_client_id: 'f21094c8-99cb-4b68-8fd6-335c53ac39f0',
+      //   metronome_environment: 'SANDBOX',
+      //   metronome_id: 'c67a2db9-4118-40c0-a934-172ec5cad875', // Metronome Invoice ID
+      // },
     });
 
-    // await this.stripe.invoiceItems.create({
-    //   invoice: invoice.id,
-    //   customer: 'cus_QUrQwAaenCruXf',
-    //   description: 'Test invoice',
-    //   amount: 100 * 100,
-    //   currency: 'usd',
-    // });
-
+    // Finalize invoice:
+    // 1. will change invoice status from `draft` to `open` and creates a payment intent (link to pay the invoice)
+    // 2. charges the invoice if the invoice is set to `charge_automatically` with the default payment method
+    //    (not immediately = smart retries), if the invoice is set to `send_invoice` the invoice will be sent to the customer
     await this.stripe.invoices.finalizeInvoice(invoice.id, {
       auto_advance: true,
+    });
+
+    // Charge this invoice immediately with throw if payment failed (e.g. insufficient funds, card declined, etc.)
+    return this.stripe.invoices.pay(invoice.id, {
+      payment_method: 'pm_1PiAIU2LWWEotPms8akQd1KF', // Payment Method ID
     });
   }
 }

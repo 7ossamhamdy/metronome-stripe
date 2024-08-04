@@ -13,7 +13,7 @@ import {
   GetGrantsResponse,
 } from './MetronomeService.d';
 
-import CREDITS_DATA from './credits-data.json';
+import { plansCharges } from './data.json';
 import { CreateCustomerDto, EventDto, PaginationDto } from './MetronomeDtos';
 
 export class MetronomeAPIError extends Error {
@@ -118,7 +118,7 @@ export class MetronomeService {
   }
 
   async createCreditGrant(customerId: string, creditId: number) {
-    const credit = CREDITS_DATA.credits.find((c) => c.id === creditId);
+    const credit = plansCharges.find((c) => c.id === creditId);
     if (!credit) {
       throw new MetronomeAPIError('Credit not found', 400);
     }

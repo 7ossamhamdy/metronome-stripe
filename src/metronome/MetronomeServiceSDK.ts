@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 
-import CREDITS_DATA from './credits-data.json';
+import { plansCharges } from './data.json';
 import { CreateCustomerDto, EventDto, PaginationDto } from './MetronomeDtos';
 import Metronome from '@metronome/sdk';
 
@@ -63,7 +63,7 @@ export class MetronomeServiceSDK {
   }
 
   async createCreditGrant(customerId: string, creditId: number) {
-    const credit = CREDITS_DATA.credits.find((c) => c.id === creditId);
+    const credit = plansCharges.find((c) => c.id === creditId);
     if (!credit) {
       throw new Metronome.APIError(400, undefined, 'Invalid credit ID', undefined);
     }
@@ -81,7 +81,7 @@ export class MetronomeServiceSDK {
     }
 
     const now = new Date();
-    const today = new Date(new Date().setUTCHours(0, 0, 0, 0), 0, 0);
+    const today = new Date(new Date().setUTCHours(0, 0, 0));
     const yearLater = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
 
     const payload: Metronome.CreditGrantCreateParams = {

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "A simple Stripe integration for Metronome",
   "main": "dist/index.js",
+  "packageManager": "yarn@1.22.22",
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
@@ -33,7 +34,7 @@
   },
   "husky": {
     "hooks": {
-      "pre-commit": "npm run lint"
+      "pre-commit": "yarn lint"
     }
   }
 }
